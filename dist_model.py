@@ -165,13 +165,13 @@ if __name__ == "__main__":
 
     # Set up training optimiser + scheduler + loss fcns and training info tracker
     optimiser = torch.optim.Adam(network.parameters(), lr=args.learn_rate, weight_decay=1e-4)
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimiser, 'min', factor=0.5, patience=5, verbose=True)
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimiser, 'min', factor=0.5, patience=5)
     loss_functions = training.LossWrapper(args.loss_fcns, args.pre_filt)
     train_track = training.TrainTrack()
     writer = SummaryWriter(os.path.join('runs2', model_name))
 
-    # Load dataset
-    dataset = dataset.DataSet(data_dir='Data')
+    # Load dataset - aqui hice yo un cambio!! para usar args.data_location
+    dataset = dataset.DataSet(data_dir=args.data_location)
 
     dataset.create_subset('train', frame_len=22050)
     dataset.load_file(os.path.join('train', args.file_name), 'train')
@@ -231,7 +231,7 @@ if __name__ == "__main__":
     test_output, test_loss = network.process_data(dataset.subsets['test'].data['input'][0],
                                      dataset.subsets['test'].data['target'][0], loss_functions, args.test_chunk)
     test_loss_ESR = lossESR(test_output, dataset.subsets['test'].data['target'][0])
-    write(os.path.join(save_path, "test_out_final.wav"), dataset.subsets['test'].fs, test_output.cpu().numpy()[:, 0, 0])
+    write(os.path.join(save_path, "test_out_final.wav"), dataset.subsets['test'].fs, test_output.detach().cpu().numpy()[:, 0, 0])
     writer.add_scalar('Loss/test_loss', test_loss.item(), 1)
     writer.add_scalar('Loss/test_lossESR', test_loss_ESR.item(), 1)
     train_track['test_loss_final'] = test_loss.item()
