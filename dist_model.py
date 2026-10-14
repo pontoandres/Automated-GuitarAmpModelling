@@ -228,28 +228,80 @@ if __name__ == "__main__":
             break
 
     lossESR = training.ESRLoss()
-    test_output, test_loss = network.process_data(dataset.subsets['test'].data['input'][0],
-                                     dataset.subsets['test'].data['target'][0], loss_functions, args.test_chunk)
-    test_loss_ESR = lossESR(test_output, dataset.subsets['test'].data['target'][0])
-    write(os.path.join(save_path, "test_out_final.wav"), dataset.subsets['test'].fs, test_output.detach().cpu().numpy()[:, 0, 0])
+
+    # Test final model
+    network.eval()
+
+    with torch.no_grad():
+        test_output, test_loss = network.process_data(
+            dataset.subsets['test'].data['input'][0],
+            dataset.subsets['test'].data['target'][0],
+            loss_functions,
+            args.test_chunk
+        )
+
+    test_loss_ESR = lossESR(
+        test_output,
+        dataset.subsets['test'].data['target'][0]
+    )
+
+    write(
+        os.path.join(save_path, "test_out_final.wav"),
+        dataset.subsets['test'].fs,
+        test_output.detach().cpu().numpy()[:, 0, 0]
+    )
+
     writer.add_scalar('Loss/test_loss', test_loss.item(), 1)
     writer.add_scalar('Loss/test_lossESR', test_loss_ESR.item(), 1)
+
     train_track['test_loss_final'] = test_loss.item()
     train_track['test_lossESR_final'] = test_loss_ESR.item()
 
+    # Free GPU memory before loading the best-validation model
+    del test_output
+    del test_loss
+    del test_loss_ESR
+    del network
+
+    if cuda:
+        torch.cuda.empty_cache()
+
+    # Test best-validation model
     best_val_net = miscfuncs.json_load('model_best', save_path)
     network = networks.load_model(best_val_net)
-    test_output, test_loss = network.process_data(dataset.subsets['test'].data['input'][0],
-                                     dataset.subsets['test'].data['target'][0], loss_functions, args.test_chunk)
-    test_loss_ESR = lossESR(test_output, dataset.subsets['test'].data['target'][0])
-    write(os.path.join(save_path, "test_out_bestv.wav"),
-          dataset.subsets['test'].fs, test_output.cpu().numpy()[:, 0, 0])
+
+    if cuda:
+        network = network.cuda()
+
+    network.eval()
+
+    with torch.no_grad():
+        test_output, test_loss = network.process_data(
+            dataset.subsets['test'].data['input'][0],
+            dataset.subsets['test'].data['target'][0],
+            loss_functions,
+            args.test_chunk
+        )
+
+    test_loss_ESR = lossESR(
+        test_output,
+        dataset.subsets['test'].data['target'][0]
+    )
+
+    write(
+        os.path.join(save_path, "test_out_bestv.wav"),
+        dataset.subsets['test'].fs,
+        test_output.detach().cpu().numpy()[:, 0, 0]
+    )
+
     writer.add_scalar('Loss/test_loss', test_loss.item(), 2)
     writer.add_scalar('Loss/test_lossESR', test_loss_ESR.item(), 2)
+
     train_track['test_loss_best'] = test_loss.item()
     train_track['test_lossESR_best'] = test_loss_ESR.item()
+
     miscfuncs.json_save(train_track, 'training_stats', save_path)
+
     if cuda:
         with open(os.path.join(save_path, 'maxmemusage.txt'), 'w') as f:
             f.write(str(torch.cuda.max_memory_allocated()))
-
